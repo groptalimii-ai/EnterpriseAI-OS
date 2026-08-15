@@ -1,0 +1,324 @@
+version: '3.8'
+
+services:
+  # === Frontend ===
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_WS_URL=ws://localhost:8000/ws
+      - REACT_APP_ENV=production
+    depends_on:
+      - backend
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  # === Backend API ===
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://enterpriseai:${DB_PASSWORD}@postgres:5432/enterpriseai
+      - REDIS_URL=redis://redis:6379/0
+      - CLICKHOUSE_URL=clickhouse://clickhouse:8123/enterpriseai
+      - JWT_SECRET=${JWT_SECRET}
+      - AI_MODEL_PATH=/models
+      - AI_GPU_ENABLED=${AI_GPU_ENABLED:-false}
+    volumes:
+      - ./models:/models:ro
+      - ./data:/data
+    depends_on:
+      - postgres
+      - redis
+      - clickhouse
+      - kafka
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+
+  # === AI Agents ===
+  financial-agent:
+    build:
+      context: ./ai_agents/financial_agent
+      dockerfile: Dockerfile
+    environment:
+      - AGENT_TYPE=financial
+      - BACKEND_URL=http://backend:8000
+      - MODEL_PATH=/models/financial
+      - GPU_ENABLED=${AI_GPU_ENABLED:-false}
+    volumes:
+      - ./models/financial:/models/financial:ro
+      - ./data/financial:/data
+    depends_on:
+      - backend
+      - kafka
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
+  inventory-agent:
+    build:
+      context: ./ai_agents/inventory_agent
+      dockerfile: Dockerfile
+    environment:
+      - AGENT_TYPE=inventory
+      - BACKEND_URL=http://backend:8000
+      - MODEL_PATH=/models/inventory
+    volumes:
+      - ./models/inventory:/models/inventory:ro
+      - ./data/inventory:/data
+    depends_on:
+      - backend
+      - kafka
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  production-agent:
+    build:
+      context: ./ai_agents/production_agent
+      dockerfile: Dockerfile
+    environment:
+      - AGENT_TYPE=production
+      - BACKEND_URL=http://backend:8000
+      - MODEL_PATH=/models/production
+    depends_on:
+      - backend
+      - kafka
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  accounting-agent:
+    build:
+      context: ./ai_agents/accounting_agent
+      dockerfile: Dockerfile
+    environment:
+      - AGENT_TYPE=accounting
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+      - kafka
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  audit-agent:
+    build:
+      context: ./ai_agents/audit_agent
+      dockerfile: Dockerfile
+    environment:
+      - AGENT_TYPE=audit
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+      - kafka
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  investment-agent:
+    build:
+      context: ./ai_agents/investment_agent
+      dockerfile: Dockerfile
+    environment:
+      - AGENT_TYPE=investment
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+      - kafka
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  revenue-agent:
+    build:
+      context: ./ai_agents/revenue_agent
+      dockerfile: Dockerfile
+    environment:
+      - AGENT_TYPE=revenue
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+      - kafka
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  hr-agent:
+    build:
+      context: ./ai_agents/hr_agent
+      dockerfile: Dockerfile
+    environment:
+      - AGENT_TYPE=hr
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+      - kafka
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  marketing-agent:
+    build:
+      context: ./ai_agents/marketing_agent
+      dockerfile: Dockerfile
+    environment:
+      - AGENT_TYPE=marketing
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+      - kafka
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  executive-agent:
+    build:
+      context: ./ai_agents/executive_agent
+      dockerfile: Dockerfile
+    environment:
+      - AGENT_TYPE=executive
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+      - kafka
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  cross-department-agent:
+    build:
+      context: ./ai_agents/cross_department_agent
+      dockerfile: Dockerfile
+    environment:
+      - AGENT_TYPE=cross_department
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+      - kafka
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  # === Databases ===
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=enterpriseai
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=enterpriseai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  # === Message Broker ===
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  # === Monitoring ===
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./infrastructure/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    ports:
+      - "3001:3000"
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+  # === Vector Database ===
+  milvus:
+    image: milvusdb/milvus:latest
+    ports:
+      - "19530:19530"
+    volumes:
+      - milvus_data:/var/lib/milvus
+    networks:
+      - enterpriseai-network
+    restart: unless-stopped
+
+networks:
+  enterpriseai-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  clickhouse_data:
+  prometheus_data:
+  grafana_data:
+  milvus_data:
