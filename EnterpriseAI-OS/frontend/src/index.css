@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  body {
+    @apply bg-enterprise-dark text-white font-arabic;
+    direction: rtl;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-enterprise-card/80 backdrop-blur-lg border border-enterprise-border rounded-xl;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent;
+  }
+
+  .hover-glow {
+    @apply transition-all duration-300 hover:shadow-lg hover:shadow-primary-500/20;
+  }
+}
